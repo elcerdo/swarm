@@ -7,7 +7,7 @@ A simple echo client that handles some exceptions
 import socket
 import sys
 
-host = 'localhost'
+host = 'sd-12155.dedibox.fr'
 port = 9999
 size = 1024
 s = None
@@ -19,7 +19,7 @@ except socket.error, (value,message):
         s.close()
     print "Could not open socket: " + message
     sys.exit(1)
-s.send('Hello, world')
+s.send('Hello, world from ' + socket.gethostname())
 data = s.recv(size)
 s.close()
 print 'Received:', data
