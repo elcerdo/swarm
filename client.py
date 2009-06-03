@@ -6,6 +6,7 @@ A simple echo client that handles some exceptions
 
 import socket
 import sys
+import time
 
 host = 'sd-12155.dedibox.fr'
 port = 9999
@@ -19,7 +20,10 @@ except socket.error, (value,message):
         s.close()
     print "Could not open socket: " + message
     sys.exit(1)
+
+delay=time.time()
 s.send('Hello, world from ' + socket.gethostname())
 data = s.recv(size)
+delay-=time.time()
 s.close()
-print 'Received:', data
+print 'Received: %s in %fms' % (data,-1e3*delay)
