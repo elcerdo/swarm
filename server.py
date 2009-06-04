@@ -6,6 +6,7 @@ A simple echo server that handles some exceptions
 
 import socket
 import sys
+import pickle
 
 host = ''
 port = 9999
@@ -25,7 +26,7 @@ except socket.error, (code,message):
 while 1:
     client, address = s.accept()
     data = client.recv(size)
-    print "Received: " + data
+    print "Received: %s" % pickle.loads(data)
     if data:
         client.send(data)
     client.close()
