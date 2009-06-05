@@ -6,6 +6,9 @@ import time
 import pickle
 import random
 import hashlib
+import threading
+import re
+import os
 
 class NoWayError(Exception):
     def __init__(self,request,answer):
@@ -31,7 +34,7 @@ class Client:
     def __init__(self,options):
         self.options = options
         self.seed = hashlib.sha1("%s%s%s" % (socket.gethostname(),random.randint(0,65535),time.time())).hexdigest()
-        self.peers = []
+        self.peers = {}
         self.idpeers = hashlib.sha1("%s" % self.peers).hexdigest()
 
     def send_resquest(self,send_data):
@@ -59,17 +62,114 @@ class Client:
         if idpeers != self.idpeers:
             self.peers = peers
             self.idpeers = idpeers
-            print "Updated peers %s" % self.peers
+            return True
+        else:
+            return False
+
+class DataPing:
+    class Pinger(threading.Thread):
+        def __init__ (self,link,n=10):
+            threading.Thread.__init__(self)
+            self.link = link
+            self.lifeline = re.compile(r"(\d+) received")
+            self.statline = re.compile(r"(\d+\.\d+)/(\d+\.\d+)/(\d+\.\d+)/(\d+\.\d+)")
+            self.n = n
+
+        def run(self):
+            pingaling = os.popen("ping -q -c%d %s" % (self.n,self.link.ip),"r")
+            success = False
+            avg = 0
+            std = 0
+
+            while 1:
+                line = pingaling.readline()
+                if not line: break
+
+                igot = re.findall(self.lifeline,line)
+                if igot:
+                    success = (int(igot[0])==self.n)
+
+                igot = re.findall(self.statline,line)
+                if igot:
+                    avg = float(igot[0][1])
+                    std = float(igot[0][3])
+
+            self.link.update(success,avg,std)
+
+    class Link:
+        def __init__(self,target_idseed,ip):
+            self.last_ping = None
+            self.success = False
+            self.count = 0
+            self.avg = 0
+            self.std = 0
+            self.target_idseed = target_idseed
+            self.ip = ip
+
+        def update(self,success,avg,std):
+            self.count += 1
+            self.last_ping = time.time()
+            self.success = success
+            self.avg = avg
+            self.std = std
+
+        def __cmp__(self,y):
+            if self.last_ping is None and y.last_ping is None:
+                return 0
+            if self.last_ping is not None and y.last_ping is None:
+                return -1
+            if self.last_ping is None and y.last_ping is not None:
+                return 1
+            if self.last_ping is not None and y.last_ping is not None:
+                return -cmp(self.count,y.count)
+
+        def __repr__(self):
+            if self.last_ping is None:
+                return "ip=%s never pinged" % self.ip
+            else:
+                return "ip=%s count=%d success=%d avg=%f std=%f" % (self.ip,self.count,self.success,self.avg,self.std)
+
+    def __init__(self,options):
+        self.links = {}
+        self.pinger = None
+        self.options = options
+
+    def update(self,peers):
+        active_idseed = set(peers.keys())
+        active_links = set(self.links.keys())
+
+        for idseed in active_idseed.difference(active_links):
+            self.links[idseed] = DataPing.Link(idseed,peers[idseed][0])
+
+        for idseed in active_links.difference(active_idseed):
+            del self.links[idseed]
+
+    def manage_pinger(self):
+        if self.pinger is not None and not self.pinger.is_alive():
+            print "Pinger acquired data %s" % self.pinger.link
+            self.pinger = None
+
+        if self.pinger is None and self.links:
+            candidates = self.links.values()
+            candidates.sort()
+            print "Launching pinger on link %s" % candidates[-1]
+            self.pinger = DataPing.Pinger(candidates[-1])
+            self.pinger.start()
+
 
 
 if __name__=="__main__":
     options = parse_options()
     client = Client(options)
+    dataping = DataPing(options)
 
     client.say_hi()
     try:
         while True:
+            if client.chocke_tracker():
+                dataping.update(client.peers)
+                print "Updated peers (%d peers)" % len(client.peers)
+            dataping.manage_pinger()
             time.sleep(options.chocke_time)
-            client.chocke_tracker()
     except KeyboardInterrupt:
         client.say_bye()
