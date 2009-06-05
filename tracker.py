@@ -54,6 +54,8 @@ class Peers:
         self.__peers = {}
         self.__update_cache()
         self.__peers_lock = threading.Lock()
+        self.__links = {}
+        self.__links_lock = threading.Lock()
 
     def __update_cache(self):
         self.peers_dict = dict((idseed,(peer.ip,peer.name)) for idseed,peer in self.__peers.items())
@@ -79,10 +81,17 @@ class Peers:
         if idseed in self.__peers:
             self.__peers[idseed].chocke()
             self.__peers_lock.release()
+            
             if "idpeers" in data and data["idpeers"]==self.peers_hash:
                 ack(client,([],self.peers_hash))
             else:
                 ack(client,(self.peers_dict,self.peers_hash))
+            
+            if "links" in data and data["links"]:
+                self.__links_lock.acquire()
+                self.__links[idseed] = data["links"]
+                self.__links_lock.release()
+
         else:
             self.__peers_lock.release()
             orly(client,"not registered yet")
@@ -109,7 +118,24 @@ class Peers:
             aa.append("%s: %s %s last seen %fs ago" % (idseed,peer.name,peer.ip,current_time-peer.chocke_time))
         self.__peers_lock.release()
 
-        return '\n'.join(aa)
+        self.__links_lock.acquire()
+        bb = ["%d links" % sum(len(ll) for ll in self.__links.values())]
+        for emit,ll in self.__links.items():
+            for rec,success,avg in ll:
+
+                self.__peers_lock.acquire()
+                if emit in self.__peers: emit = self.__peers[emit].name
+                if rec in self.__peers: rec = self.__peers[rec].name
+                self.__peers_lock.release()
+                base  = "%s -> %s" % (emit,rec)
+
+                if success:
+                    bb.append("%s %fms" % (base,avg))
+                else:
+                    bb.append("%s unreachable" % base)
+        self.__links_lock.release()
+
+        return '\n'.join(aa)+'\n\n'+'\n'.join(bb)
 
     def clean_unchocked_peers(self,chocke_timeout):
         current_time = time.time()
