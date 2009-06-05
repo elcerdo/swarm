@@ -8,7 +8,11 @@ import random
 import hashlib
 
 class NoWayError(Exception):
-    pass
+    def __init__(self,request,answer):
+        self.request=request
+        self.answer=answer
+    def __str__(self):
+        return "Error while sendind query '%s' got '%s'" % (self.request,self.answer)
 
 def parse_options():
     from optparse import OptionParser
@@ -38,14 +42,16 @@ def create_seed():
     sha1 = hashlib.sha1("%s%s%s" % (socket.gethostname(),random.randint(0,65535),time.time()))
     return sha1.hexdigest()
 
-def send_resquest(data,options):
+def send_resquest(send_data,options):
     s = init_socket(options)
-    s.send(pickle.dumps(data))
-    rec_data = pickle.loads(s.recv(options.packet_size))
+    s.send(pickle.dumps(send_data))
+    answer,recv_data = pickle.loads(s.recv(options.packet_size))
     s.close()
-    if rec_data is None:
-        raise NoWayError
-    return rec_data[1]
+    if answer!="ok":
+        raise NoWayError(send_data,recv_data)
+        return None
+    else:
+        return recv_data
 
 def say_hi(seed,options):
     return send_resquest({"action":"sayhello","name":socket.gethostname(),"idseed":seed},options)
@@ -64,7 +70,7 @@ if __name__=="__main__":
             time.sleep(1)
 
             tic = time.time()
-            rec_data = send_resquest({"action":"chocke","name":socket.gethostname(),"seed":seed},options)
+            rec_data = send_resquest({"action":"chocke","idseed":seed,"name":socket.gethostname()},options)
             toc = time.time()
 
             if not rec_data:
