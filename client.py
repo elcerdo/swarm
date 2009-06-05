@@ -21,62 +21,55 @@ def parse_options():
     parser.add_option("-t","--tracker",dest="tracker",type="string",default="localhost")
     parser.add_option("-b","--backlog",dest="backlog",type="int",default=5)
     parser.add_option("-s","--packet-size",dest="packet_size",type="int",default=1024)
-    parser.add_option("--timeout",dest="timeout",type="float",default=1.)
+    parser.add_option("--timeout",dest="timeout",type="int",default=1)
+    parser.add_option("--chocketime",dest="chocke_time",type="int",default=3)
     (options,args) = parser.parse_args()
     return options
 
-def init_socket(options):
-    try:
+
+class Client:
+    def __init__(self,options):
+        self.options = options
+        self.seed = hashlib.sha1("%s%s%s" % (socket.gethostname(),random.randint(0,65535),time.time())).hexdigest()
+        self.peers = []
+        self.idpeers = hashlib.sha1("%s" % self.peers).hexdigest()
+
+    def send_resquest(self,send_data):
         s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-        s.connect((options.tracker,options.port))
-        s.settimeout(options.timeout)
-        return s
-    except socket.error, (value,message):
-        if s:
-            s.close()
-        print "Could not open socket: " + message
-        sys.exit(1)
-        return None
+        s.connect((self.options.tracker,self.options.port))
+        s.settimeout(self.options.timeout)
+        send_data["idseed"]=self.seed
+        s.send(pickle.dumps(send_data))
+        answer,recv_data = pickle.loads(s.recv(self.options.packet_size))
+        s.close()
+        if answer!="ok":
+            raise NoWayError(send_data,recv_data)
+            return None
+        else:
+            return recv_data
 
-def create_seed():
-    sha1 = hashlib.sha1("%s%s%s" % (socket.gethostname(),random.randint(0,65535),time.time()))
-    return sha1.hexdigest()
+    def say_hi(self):
+        self.send_resquest({"action":"sayhello","name":socket.gethostname()})
 
-def send_resquest(send_data,options):
-    s = init_socket(options)
-    s.send(pickle.dumps(send_data))
-    answer,recv_data = pickle.loads(s.recv(options.packet_size))
-    s.close()
-    if answer!="ok":
-        raise NoWayError(send_data,recv_data)
-        return None
-    else:
-        return recv_data
+    def say_bye(self):
+        self.send_resquest({"action":"goodbye"})
 
-def say_hi(seed,options):
-    return send_resquest({"action":"sayhello","name":socket.gethostname(),"idseed":seed},options)
+    def chocke_tracker(self):
+        peers,idpeers = self.send_resquest({"action":"chocke","idpeers":self.idpeers})
+        if idpeers != self.idpeers:
+            self.peers = peers
+            self.idpeers = idpeers
+            print "Updated peers %s" % self.peers
 
-def say_bye(seed,options):
-    return send_resquest({"action":"goodbye","idseed":seed},options)
 
 if __name__=="__main__":
     options = parse_options()
-    seed = create_seed()
+    client = Client(options)
 
-    say_hi(seed,options)
-
+    client.say_hi()
     try:
         while True:
-            time.sleep(1)
-
-            tic = time.time()
-            rec_data = send_resquest({"action":"chocke","idseed":seed,"name":socket.gethostname()},options)
-            toc = time.time()
-
-            if not rec_data:
-                print "Problem connecting to tracker"
-                continue
-
-            print 'Received: %s in %fms' % (rec_data,1e3*(toc-tic))
+            time.sleep(options.chocke_time)
+            client.chocke_tracker()
     except KeyboardInterrupt:
-        say_bye(seed,options)
+        client.say_bye()
