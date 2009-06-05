@@ -145,7 +145,7 @@ class DataPing:
             del self.links[idseed]
 
     def manage_pinger(self):
-        if self.pinger is not None and not self.pinger.is_alive():
+        if self.pinger is not None and not self.pinger.isAlive():
             print "Pinger acquired data %s" % self.pinger.link
             self.pinger = None
 
