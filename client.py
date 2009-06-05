@@ -97,7 +97,7 @@ class DataPing:
             self.link.update(success,avg,std)
 
     class Link:
-        def __init__(self,target_idseed,ip):
+        def __init__(self,target_idseed,ip,name):
             self.last_ping = None
             self.success = False
             self.count = 0
@@ -105,6 +105,7 @@ class DataPing:
             self.std = 0
             self.target_idseed = target_idseed
             self.ip = ip
+            self.name = name
 
         def update(self,success,avg,std):
             self.count += 1
@@ -124,10 +125,13 @@ class DataPing:
                 return -cmp(self.count,y.count)
 
         def __repr__(self):
+            base="name=%s ip=%s" % (self.name,self.ip)
             if self.last_ping is None:
-                return "ip=%s never pinged" % self.ip
-            else:
-                return "ip=%s count=%d success=%d avg=%f std=%f" % (self.ip,self.count,self.success,self.avg,self.std)
+                return "%s never pinged" % base
+            elif not self.success:
+                return "%s count=%d success=%d" % (base,self.count,self.success)
+            elif self.success:
+                return "%s count=%d success=%d avg=%f std=%f" % (base,self.count,self.success,self.avg,self.std)
 
     def __init__(self,options):
         self.links = {}
@@ -139,7 +143,7 @@ class DataPing:
         active_links = set(self.links.keys())
 
         for idseed in active_idseed.difference(active_links):
-            self.links[idseed] = DataPing.Link(idseed,peers[idseed][0])
+            self.links[idseed] = DataPing.Link(idseed,peers[idseed][0],peers[idseed][1])
 
         for idseed in active_links.difference(active_idseed):
             del self.links[idseed]
@@ -152,7 +156,7 @@ class DataPing:
         if self.pinger is None and self.links:
             candidates = self.links.values()
             candidates.sort()
-            print "Launching pinger on link %s" % candidates[-1]
+            #print "Launching pinger on link %s" % candidates[-1]
             self.pinger = DataPing.Pinger(candidates[-1])
             self.pinger.start()
 
