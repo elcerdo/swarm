@@ -57,8 +57,8 @@ class Client:
     def say_bye(self):
         self.send_resquest({"action":"goodbye"})
 
-    def chocke_tracker(self):
-        peers,idpeers = self.send_resquest({"action":"chocke","idpeers":self.idpeers})
+    def chocke_tracker(self,links):
+        peers,idpeers = self.send_resquest({"action":"chocke","idpeers":self.idpeers,"links":[(link.target_idseed,link.success,link.avg) for link in links.values() if link.last_ping is not None]})
         if idpeers != self.idpeers:
             self.peers = peers
             self.idpeers = idpeers
@@ -170,7 +170,7 @@ if __name__=="__main__":
     client.say_hi()
     try:
         while True:
-            if client.chocke_tracker():
+            if client.chocke_tracker(dataping.links):
                 dataping.update(client.peers)
                 print "Updated peers (%d peers)" % len(client.peers)
             dataping.manage_pinger()
