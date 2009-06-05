@@ -6,6 +6,7 @@ import sys
 import pickle
 import time
 import signal
+import hashlib
 
 def parse_options():
     from optparse import OptionParser
@@ -13,8 +14,8 @@ def parse_options():
     parser.add_option("-p","--port",dest="port",type="int",default=9999)
     parser.add_option("-b","--backlog",dest="backlog",type="int",default=5)
     parser.add_option("-s","--packet-size",dest="packet_size",type="int",default=1024)
-    parser.add_option("--timeout",dest="timeout",type="float",default=1.)
-    parser.add_option("--chocketimeout",dest="chocke_timeout",type="float",default=3.)
+    parser.add_option("--timeout",dest="timeout",type="int",default=1)
+    parser.add_option("--chocketimeout",dest="chocke_timeout",type="int",default=5)
     (options,args) = parser.parse_args()
     return options
 
@@ -39,19 +40,33 @@ def ack(client,data=None):
     client.send(pickle.dumps(("ok",data)))
 
 class Peers:
+    class Peer:
+        def __init__(self,data):
+            self.name = data["name"]
+            self.ip = data["ip"]
+            self.chocke_time = time.time()
+
+        def chocke(self):
+            self.chocke_time = time.time()
+
     def __init__(self):
         self.__peers = {}
+        self.__update_cache()
         self.__peers_lock = threading.Lock()
+
+    def __update_cache(self):
+        self.peers_list = [(idseed,peer.ip,peer.name) for idseed,peer in self.__peers.items()]
+        self.peers_hash = hashlib.sha1("%s" % self.peers_list).hexdigest()
 
     def register_peer(self,data,client):
         idseed = data["idseed"]
 
         self.__peers_lock.acquire()
         if idseed not in self.__peers:
-            self.__peers[idseed] = time.time()
-            peers_list=[id for id in self.__peers]
+            self.__peers[idseed] = Peers.Peer(data)
+            self.__update_cache()
             self.__peers_lock.release()
-            ack(client,peers_list)
+            ack(client)
         else:
             self.__peers_lock.release()
             orly(client,"already registered")
@@ -61,10 +76,12 @@ class Peers:
 
         self.__peers_lock.acquire()
         if idseed in self.__peers:
-            self.__peers[idseed] = time.time()
-            peers_list=[id for id in self.__peers]
+            self.__peers[idseed].chocke()
             self.__peers_lock.release()
-            ack(client,peers_list)
+            if "idpeers" in data and data["idpeers"]==self.peers_hash:
+                ack(client,([],self.peers_hash))
+            else:
+                ack(client,(self.peers_list,self.peers_hash))
         else:
             self.__peers_lock.release()
             orly(client,"not registered yet")
@@ -75,6 +92,7 @@ class Peers:
         self.__peers_lock.acquire()
         if idseed in self.__peers:
             del self.__peers[idseed]
+            self.__update_cache()
             self.__peers_lock.release()
             ack(client)
         else:
@@ -86,8 +104,8 @@ class Peers:
 
         self.__peers_lock.acquire()
         aa = ["%d peers" % len(self.__peers)]
-        for idseed,data in self.__peers.items():
-            aa.append("%s last seen %fs ago" % (idseed,current_time-data))
+        for idseed,peer in self.__peers.items():
+            aa.append("%s: %s %s last seen %fs ago" % (idseed,peer.name,peer.ip,current_time-peer.chocke_time))
         self.__peers_lock.release()
 
         return '\n'.join(aa)
@@ -96,8 +114,8 @@ class Peers:
         current_time = time.time()
 
         self.__peers_lock.acquire()
-        for idseed,data in self.__peers.items():
-            if current_time-data > chocke_timeout:
+        for idseed,peer in self.__peers.items():
+            if current_time-peer.chocke_time > chocke_timeout:
                 del self.__peers[idseed]
         self.__peers_lock.release()
 
@@ -120,6 +138,7 @@ class Server(threading.Thread):
                 client.settimeout(options.timeout)
                 data = pickle.loads(client.recv(options.packet_size))
                 if "action" in data and "idseed" in data and data["action"] in actions:
+                    data["ip"]=address[0]
                     actions[data["action"]](data,client)
                 else:
                     orly(client,"invalid action or no idseed")
@@ -140,7 +159,6 @@ class Cleaner(threading.Thread):
     def run(self):
         while not self.quit:
             self.peers.clean_unchocked_peers(self.options.chocke_timeout)
-
             time.sleep(self.options.timeout)
             
 if __name__=="__main__":
