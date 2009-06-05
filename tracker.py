@@ -3,6 +3,7 @@
 import threading
 import socket
 import sys
+import os
 import pickle
 import time
 import signal
@@ -55,8 +56,8 @@ class Peers:
         self.__peers_lock = threading.Lock()
 
     def __update_cache(self):
-        self.peers_list = [(idseed,peer.ip,peer.name) for idseed,peer in self.__peers.items()]
-        self.peers_hash = hashlib.sha1("%s" % self.peers_list).hexdigest()
+        self.peers_dict = dict((idseed,(peer.ip,peer.name)) for idseed,peer in self.__peers.items())
+        self.peers_hash = hashlib.sha1("%s" % self.peers_dict).hexdigest()
 
     def register_peer(self,data,client):
         idseed = data["idseed"]
@@ -81,7 +82,7 @@ class Peers:
             if "idpeers" in data and data["idpeers"]==self.peers_hash:
                 ack(client,([],self.peers_hash))
             else:
-                ack(client,(self.peers_list,self.peers_hash))
+                ack(client,(self.peers_dict,self.peers_hash))
         else:
             self.__peers_lock.release()
             orly(client,"not registered yet")
@@ -166,6 +167,8 @@ if __name__=="__main__":
     options = parse_options()
     server = Server(peers,options)
     cleaner = Cleaner(peers,options)
+
+    print "Starting tracker pid=%d" % os.getpid()
 
     server.start()
     cleaner.start()
