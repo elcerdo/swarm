@@ -193,8 +193,8 @@ if __name__=="__main__":
 
             dataping.manage_pinger()
             time.sleep(options.chocke_time)
-    except socket.error as (errno,errstr):
-        print "Connection error: %s" % errstr
+    except socket.error, e:
+        print "Connection error: %s" % e
     except KeyboardInterrupt:
         print "Disconnecting tracker"
         client.say_bye()
