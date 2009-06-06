@@ -24,7 +24,7 @@ def parse_options():
     parser.add_option("-t","--tracker",dest="tracker",type="string",default="localhost")
     parser.add_option("-b","--backlog",dest="backlog",type="int",default=5)
     parser.add_option("-s","--packet-size",dest="packet_size",type="int",default=1024)
-    parser.add_option("--timeout",dest="timeout",type="int",default=1)
+    parser.add_option("--timeout",dest="timeout",type="int",default=2)
     parser.add_option("--chocketime",dest="chocke_time",type="int",default=3)
     (options,args) = parser.parse_args()
     return options
@@ -36,6 +36,7 @@ class Client:
         self.seed = hashlib.sha1("%s%s%s" % (socket.gethostname(),random.randint(0,65535),time.time())).hexdigest()
         self.peers = {}
         self.idpeers = hashlib.sha1("%s" % self.peers).hexdigest()
+        self.connected = False
 
     def send_resquest(self,send_data):
         s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
@@ -52,18 +53,31 @@ class Client:
             return recv_data
 
     def say_hi(self):
-        self.send_resquest({"action":"sayhello","name":socket.gethostname()})
+        while not self.connected:
+            try:
+                self.send_resquest({"action":"sayhello","name":socket.gethostname()})
+                self.connected = True
+            except NoWayError:
+                self.connected = False
+                time.sleep(options.chocke_time)
 
     def say_bye(self):
+        if not self.connected: return 
+        
         self.send_resquest({"action":"goodbye"})
+        self.connected = False
 
     def chocke_tracker(self,links):
-        peers,idpeers = self.send_resquest({"action":"chocke","idpeers":self.idpeers,"links":[(link.target_idseed,link.success,link.avg) for link in links.values() if link.last_ping is not None]})
-        if idpeers != self.idpeers:
-            self.peers = peers
-            self.idpeers = idpeers
-            return True
-        else:
+        try:
+            peers,idpeers = self.send_resquest({"action":"chocke","idpeers":self.idpeers,"links":[(link.target_idseed,link.success,link.avg) for link in links.values() if link.last_ping is not None]})
+            if idpeers != self.idpeers:
+                self.peers = peers
+                self.idpeers = idpeers
+                return True
+            else:
+                return False
+        except NoWayError:
+            self.connected = False
             return False
 
 class DataPing:
@@ -167,13 +181,20 @@ if __name__=="__main__":
     client = Client(options)
     dataping = DataPing(options)
 
-    client.say_hi()
     try:
         while True:
+            if not client.connected:
+                print "Connecting to tracker"
+                client.say_hi()
+
             if client.chocke_tracker(dataping.links):
                 dataping.update(client.peers)
                 print "Updated peers (%d peers)" % len(client.peers)
+
             dataping.manage_pinger()
             time.sleep(options.chocke_time)
+    except socket.error as (errno,errstr):
+        print "Connection error: %s" % errstr
     except KeyboardInterrupt:
+        print "Disconnecting tracker"
         client.say_bye()

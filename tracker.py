@@ -15,8 +15,8 @@ def parse_options():
     parser.add_option("-p","--port",dest="port",type="int",default=9999)
     parser.add_option("-b","--backlog",dest="backlog",type="int",default=5)
     parser.add_option("-s","--packet-size",dest="packet_size",type="int",default=1024)
-    parser.add_option("--timeout",dest="timeout",type="int",default=1)
-    parser.add_option("--chocketimeout",dest="chocke_timeout",type="int",default=5)
+    parser.add_option("--timeout",dest="timeout",type="int",default=2)
+    parser.add_option("--chocketimeout",dest="chocke_timeout",type="int",default=10)
     (options,args) = parser.parse_args()
     return options
 
