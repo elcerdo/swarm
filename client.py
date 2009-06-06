@@ -21,7 +21,7 @@ def parse_options():
     from optparse import OptionParser
     parser = OptionParser()
     parser.add_option("-p","--port",dest="port",type="int",default=9999)
-    parser.add_option("-t","--tracker",dest="tracker",type="string",default="localhost")
+    parser.add_option("-t","--tracker",dest="tracker",type="string",default="sd-12155.dedibox.fr")
     parser.add_option("-b","--backlog",dest="backlog",type="int",default=5)
     parser.add_option("-s","--packet-size",dest="packet_size",type="int",default=1024)
     parser.add_option("--timeout",dest="timeout",type="int",default=2)
