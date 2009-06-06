@@ -163,8 +163,10 @@ class DataPing:
             del self.links[idseed]
 
     def manage_pinger(self):
+        acquired_data = None
+
         if self.pinger is not None and not self.pinger.isAlive():
-            print "Pinger acquired data %s" % self.pinger.link
+            acquired_data = self.pinger.link
             self.pinger = None
 
         if self.pinger is None and self.links:
@@ -173,7 +175,8 @@ class DataPing:
             #print "Launching pinger on link %s" % candidates[-1]
             self.pinger = DataPing.Pinger(candidates[-1])
             self.pinger.start()
-
+        
+        return acquired_data
 
 
 if __name__=="__main__":
@@ -188,10 +191,13 @@ if __name__=="__main__":
                 client.say_hi()
 
             if client.chocke_tracker(dataping.links):
-                dataping.update(client.peers)
                 print "Updated peers (%d peers)" % len(client.peers)
+                dataping.update(client.peers)
 
-            dataping.manage_pinger()
+            updated_link = dataping.manage_pinger()
+            if updated_link:
+                print "Pinger acquired data %s" % updated_link
+
             time.sleep(options.chocke_time)
     except socket.error, e:
         print "Connection error: %s" % e
