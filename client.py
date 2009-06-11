@@ -5,7 +5,11 @@ import sys
 import time
 import pickle
 import random
-import hashlib
+try:
+	import hashlib
+except ImportError:
+	import sha as hashlib
+	hashlib.sha1 = hashlib.sha
 import threading
 import re
 import os
