@@ -136,7 +136,7 @@ class DataPing:
             if self.last_ping is None and y.last_ping is not None:
                 return 1
             if self.last_ping is not None and y.last_ping is not None:
-                return -cmp(self.count,y.count)
+                return -cmp(self.last_ping,y.last_ping)
 
         def __repr__(self):
             base="name=%s ip=%s" % (self.name,self.ip)
@@ -172,7 +172,6 @@ class DataPing:
         if self.pinger is None and self.links:
             candidates = self.links.values()
             candidates.sort()
-            #print "Launching pinger on link %s" % candidates[-1]
             self.pinger = DataPing.Pinger(candidates[-1])
             self.pinger.start()
         
