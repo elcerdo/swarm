@@ -137,6 +137,26 @@ class Peers:
 
         return '\n'.join(aa)+'\n\n'+'\n'.join(bb)
 
+    def save(self,filename):
+        data={}
+
+        self.__links_lock.acquire()
+        for emit,ll in self.__links.items():
+            for rec,success,avg in ll:
+
+                self.__peers_lock.acquire()
+                if emit in self.__peers and rec in self.__peers:
+                    emit_name = self.__peers[emit].name
+                    rec_name = self.__peers[rec].name
+
+                    data[(emit,rec)]=(emit_name,rec_name,success,avg)
+                self.__peers_lock.release()
+        self.__links_lock.release()
+
+        file = open(filename,'wb')
+        pickle.dump(data,file)
+        file.close()
+
     def clean_unchocked_peers(self,chocke_timeout):
         current_time = time.time()
 
@@ -208,6 +228,8 @@ if __name__=="__main__":
             quit = True
         elif cmd[0]=="status" or cmd[0]=="s":
             print peers
+        elif cmd[0]=="dump" or cmd[0]=="d":
+            peers.save("dump.pck")
 
 
     server.quit = True
